@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASKY Staff - Dashboard FIH</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-light">
+  <div class="staff-container">
+    <header class="staff-header">
+      <h2>ASKY Dangerous Goods Portal - Boarding Control (FIH)</h2>
+      <div id="userInfo"></div>
+    </header>
+
+    <div id="loginSection" class="card">
+      <h3>Accès Agent / Superviseur</h3>
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Identifiant</label>
+          <input type="text" id="username" required>
+        </div>
+        <div class="form-group">
+          <label>Mot de passe</label>
+          <input type="password" id="password" required>
+        </div>
+        <button type="submit" class="btn-primary">Se connecter</button>
+      </form>
+    </div>
+
+    <div id="dashboardSection" class="hidden">
+      <div class="filter-bar card">
+        <input type="text" id="filterFlight" placeholder="N° Vol (ex: KP045)">
+        <input type="date" id="filterDate">
+        <input type="text" id="filterSearch" placeholder="Nom passager, PNR ou Réf">
+        <button onclick="loadDeclarations()" class="btn-secondary">Filtrer</button>
+        <button onclick="exportToCSV()" class="btn-primary">Exporter CSV</button>
+      </div>
+
+      <div class="card">
+        <h3>Déclarations Récentes</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Réf</th>
+              <th>Passager</th>
+              <th>PNR</th>
+              <th>Vol / Date</th>
+              <th>Destination</th>
+              <th>Alerte Risk (Q5)</th>
+              <th>Statut</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="declarationsTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="staff.js"></script>
+</body>
+</html>

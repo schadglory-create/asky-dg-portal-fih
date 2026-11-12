@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASKY - Déclaration Batteries au Lithium (FIH)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo-area">
+        <h1>ASKY</h1>
+        <span class="station-tag">Station Kinshasa (FIH)</span>
+      </div>
+      <div class="lang-switch">
+        <button id="btn-fr" class="active" onclick="switchLang('fr')">FR</button>
+        <button id="btn-en" onclick="switchLang('en')">EN</button>
+      </div>
+    </header>
+
+    <div class="doc-ref">Ref: SKK-GRH-REC-015 – Rev 01 – June 2026</div>
+
+    <form id="passengerForm">
+      <section class="card">
+        <h2 data-fr="1. Informations Passager & Vol" data-en="1. Passenger & Flight Details">1. Informations Passager & Vol</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label data-fr="Nom complet (tel que sur le billet)" data-en="Full Name (as on ticket)">Nom complet</label>
+            <input type="text" id="passenger_name" required placeholder="Ex: KABONGO MUKENDI">
+          </div>
+          <div class="form-group">
+            <label data-fr="Référence de réservation (PNR)" data-en="Booking Reference (PNR)">Référence réservation</label>
+            <input type="text" id="booking_ref" maxlength="10" required placeholder="Ex: KP8X9Z">
+          </div>
+          <div class="form-group">
+            <label data-fr="Numéro de vol" data-en="Flight Number">N° de vol</label>
+            <input type="text" id="flight_number" required placeholder="Ex: KP045">
+          </div>
+          <div class="form-group">
+            <label data-fr="Date du vol" data-en="Flight Date">Date du vol</label>
+            <input type="date" id="flight_date" required>
+          </div>
+          <div class="form-group">
+            <label for="origin" data-fr="Provenance" data-en="Origin">Provenance</label>
+            <select id="origin" required>
+              <option value="FIH" selected>Kinshasa (FIH)</option>
+              <option value="BZV">Brazzaville (BZV)</option>
+              <option value="LFW">Lomé (LFW)</option>
+              <option value="ROB">Monrovia (ROB)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="destination" data-fr="Destination" data-en="Destination">Destination</label>
+            <select id="destination" required>
+              <option value="">-- Sélectionnez / Select --</option>
+              <option value="LFW">Lomé (LFW)</option>
+              <option value="ROB">Monrovia (ROB)</option>
+              <option value="BZV">Brazzaville (BZV)</option>
+              <option value="JNB">Johannesburg (JNB)</option>
+              <option value="ABJ">Abidjan (ABJ)</option>
+              <option value="ACC">Accra (ACC)</option>
+              <option value="LOS">Lagos (LOS)</option>
+              <option value="ABV">Abuja (ABV)</option>
+              <option value="DLA">Douala (DLA)</option>
+              <option value="NSI">Yaoundé (NSI)</option>
+              <option value="LBV">Libreville (LBV)</option>
+              <option value="COO">Cotonou (COO)</option>
+              <option value="BKO">Bamako (BKO)</option>
+              <option value="OUA">Ouagadougou (OUA)</option>
+              <option value="NIM">Niamey (NIM)</option>
+              <option value="DKR">Dakar (DKR)</option>
+              <option value="CKY">Conakry (CKY)</option>
+              <option value="FNA">Freetown (FNA)</option>
+              <option value="BJL">Banjul (BJL)</option>
+              <option value="OXB">Bissau (OXB)</option>
+              <option value="NDJ">N'Djamena (NDJ)</option>
+              <option value="BGF">Bangui (BGF)</option>
+              <option value="LAD">Luanda (LAD)</option>
+              <option value="PNR">Pointe-Noire (PNR)</option>
+              <option value="SSG">Malabo (SSG)</option>
+              <option value="TMS">São Tomé (TMS)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 data-fr="2. Questionnaire Batteries au Lithium & Power Banks" data-en="2. Lithium Batteries & Power Banks Questionnaire">2. Questionnaire Safety</h2>
+        
+        <div class="q-item">
+          <p class="q-text" data-fr="1. Transportez-vous des batteries au lithium de rechange ou des Power Banks ?" data-en="1. Are you carrying spare lithium batteries or Power Banks?">1. Transportez-vous des batteries de rechange ou Power Banks ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q1" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q1" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item">
+          <p class="q-text" data-fr="2. Les batteries de rechange et Power Banks sont-elles conservées en cabine ou sur vous-même ?" data-en="2. Are spare batteries and Power Banks kept in cabin baggage or on yourself?">2. Conservées en cabine ou sur vous-même ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q2" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q2" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item">
+          <p class="q-text" data-fr="3. Transportez-vous au maximum deux (2) Power Banks par personne ?" data-en="3. Are you carrying a maximum of two (2) Power Banks per person?">3. Maximum 2 Power Banks par personne ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q3" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q3" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item">
+          <p class="q-text" data-fr="4. Les bornes des batteries de rechange sont-elles individuellement protégées contre les courts-circuits ?" data-en="4. Are spare battery terminals individually protected against short circuits?">4. Protection contre les courts-circuits ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q4" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q4" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item warning-box">
+          <p class="q-text" data-fr="5. Vos batteries ou Power Banks sont-ils endommagés, défectueux, gonflés ou ont-ils surchauffé ?" data-en="5. Are any of your batteries or Power Banks damaged, defective, swollen, or overheated?">5. Batteries endommagées, gonflées ou défectueuses ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q5" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q5" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item">
+          <p class="q-text" data-fr="6. Confirmez-vous qu'aucune batterie de rechange ni Power Bank n'est placée dans un bagage enregistré (en soute) ?" data-en="6. Do you confirm no spare battery or Power Bank is placed in checked baggage?">6. Aucune batterie/Power Bank en soute ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q6" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q6" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item">
+          <p class="q-text" data-fr="7. Comprenez-vous qu'il est strictement interdit de recharger les Power Banks à bord de l'avion ?" data-en="7. Do you understand it is strictly forbidden to recharge Power Banks on board?">7. Interdiction de recharger les Power Banks à bord ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q7" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q7" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+
+        <div class="q-item">
+          <p class="q-text" data-fr="8. Comprenez-vous qu'il est strictement interdit d'utiliser les Power Banks pour recharger d'autres appareils à bord ?" data-en="8. Do you understand Power Banks must not be used to charge other devices on board?">8. Interdiction d'utiliser les Power Banks en vol pour recharger ?</p>
+          <div class="radio-group">
+            <label><input type="radio" name="q8" value="true" required> <span data-fr="OUI" data-en="YES">OUI</span></label>
+            <label><input type="radio" name="q8" value="false"> <span data-fr="NON" data-en="NO">NON</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 data-fr="3. Engagement & Confirmation" data-en="3. Confirmation & Declaration">3. Engagement Passager</h2>
+        <div class="checkbox-ack">
+          <input type="checkbox" id="passenger_signature_ack" required>
+          <label for="passenger_signature_ack" data-fr="Je certifie l'exactitude des informations fournies et avoir pris connaissance de la réglementation ASKY relative aux marchandises dangereuses." data-en="I certify that the information provided is accurate and that I have read ASKY dangerous goods regulations.">
+            Je certifie l'exactitude des informations fournies.
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primary" data-fr="Soumettre la déclaration" data-en="Submit Declaration">Soumettre la déclaration</button>
+      </section>
+    </form>
+
+    <div id="confirmationModal" class="modal hidden">
+      <div class="modal-content" style="text-align:center;">
+        <h2 class="text-success" data-fr="Déclaration Enregistrée" data-en="Declaration Submitted">Déclaration Enregistrée</h2>
+        <p data-fr="Présentez ce QR Code ou cette référence à l'agent d'enregistrement ASKY :" data-en="Present this QR Code or reference to the ASKY check-in agent:">Présentez ce QR Code ou cette référence à l'agent ASKY :</p>
+        
+        <div style="margin: 15px auto; padding: 12px; background: #fff; border: 2px solid #e5e7eb; border-radius: 10px; display: inline-block;">
+          <img id="passengerQrImg" alt="QR Code Déclaration" width="200" height="200" style="display:block; margin:auto;">
+        </div>
+
+        <div class="ref-code" id="displayRef">ASKY-FIH-XXXXX</div>
+        
+        <div style="margin: 12px 0;">
+          <a id="downloadQrBtn" download="ASKY_DG_PASS.png" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 16px; font-size:14px;" data-fr="Télécharger mon QR Code" data-en="Download my QR Code">Télécharger mon QR Code</a>
+        </div>
+
+        <p class="note" data-fr="Conservez une capture d'écran de ce QR Code pour le contrôle au comptoir." data-en="Keep a screenshot of this QR Code for check-in counter verification.">Conservez une capture d'écran de ce QR Code pour le contrôle au comptoir.</p>
+        <button onclick="window.location.reload()" class="btn-secondary" data-fr="Nouvelle déclaration" data-en="New Declaration">Nouvelle déclaration</button>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
