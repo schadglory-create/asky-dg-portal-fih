@@ -10,19 +10,70 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-
-// Servir les fichiers statiques depuis 'public' ET depuis la racine du projet
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/asky_dg_fih',
-  ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
-    ? { rejectUnauthorized: false }
-    : false
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-// Helper de génération de référence unique (ex: ASKY-FIH-8X9K2)
+// Initialisation automatique des tables Neon au démarrage
+async function initDatabase() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        full_name VARCHAR(100) NOT NULL,
+        role VARCHAR(20) DEFAULT 'AGENT',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS declarations (
+        id SERIAL PRIMARY KEY,
+        declaration_ref VARCHAR(30) UNIQUE NOT NULL,
+        passenger_name VARCHAR(150) NOT NULL,
+        booking_ref VARCHAR(20) NOT NULL,
+        flight_number VARCHAR(20) NOT NULL,
+        flight_date DATE NOT NULL,
+        origin VARCHAR(10) DEFAULT 'FIH',
+        destination VARCHAR(10) NOT NULL,
+        q1_spare_lithium_powerbanks BOOLEAN,
+        q2_carried_on_person_cabin BOOLEAN,
+        q3_max_two_powerbanks BOOLEAN,
+        q4_short_circuit_protection BOOLEAN,
+        q5_damaged_defective_swollen BOOLEAN,
+        q6_no_checked_baggage BOOLEAN,
+        q7_no_recharging_onboard BOOLEAN,
+        q8_no_charging_other_devices BOOLEAN,
+        passenger_signature_ack BOOLEAN NOT NULL,
+        status VARCHAR(30) DEFAULT 'SUBMITTED',
+        agent_notes TEXT,
+        verified_by INTEGER REFERENCES users(id),
+        verified_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Création du compte agent par défaut (admin / ASKY2026) s'il n'existe pas
+    const userCheck = await pool.query('SELECT id FROM users WHERE username = $1', ['admin']);
+    if (userCheck.rows.length === 0) {
+      const hash = await bcrypt.hash('ASKY2026', 10);
+      await pool.query(
+        'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
+        ['admin', hash, 'Superviseur ASKY FIH', 'SUPERVISOR']
+      );
+    }
+    console.log('Base de données Neon prête (tables vérifiées).');
+  } catch (err) {
+    console.error('ERREUR INIT DB NEON:', err.message);
+  }
+}
+
+initDatabase();
+
 function generateDeclarationRef() {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let code = 'ASKY-FIH-';
@@ -32,7 +83,6 @@ function generateDeclarationRef() {
   return code;
 }
 
-// Middleware d'authentification Staff
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -45,21 +95,15 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// Route racine explicite pour éviter "Cannot GET /"
 app.get('/', (req, res) => {
   const publicIndex = path.join(__dirname, 'public', 'index.html');
   const rootIndex = path.join(__dirname, 'index.html');
-
-  if (fs.existsSync(publicIndex)) {
-    return res.sendFile(publicIndex);
-  }
-  if (fs.existsSync(rootIndex)) {
-    return res.sendFile(rootIndex);
-  }
-  res.status(404).send('Fichier index.html introuvable dans le dépôt.');
+  if (fs.existsSync(publicIndex)) return res.sendFile(publicIndex);
+  if (fs.existsSync(rootIndex)) return res.sendFile(rootIndex);
+  res.status(404).send('Fichier index.html introuvable.');
 });
 
-// 1. POST /api/declarations - Soumission Passager (Portail Public)
+// 1. POST /api/declarations
 app.post('/api/declarations', async (req, res) => {
   try {
     const {
@@ -73,12 +117,9 @@ app.post('/api/declarations', async (req, res) => {
       return res.status(400).json({ error: 'Tous les champs obligatoires doivent être remplis.' });
     }
 
-    let initialStatus = 'SUBMITTED';
-    if (q5_damaged_defective_swollen === true) {
-      initialStatus = 'REQUIRES_INSPECTION';
-    }
-
+    let initialStatus = q5_damaged_defective_swollen === true ? 'REQUIRES_INSPECTION' : 'SUBMITTED';
     const ref = generateDeclarationRef();
+
     const query = `
       INSERT INTO declarations (
         declaration_ref, passenger_name, booking_ref, flight_number, flight_date, origin, destination,
@@ -102,11 +143,11 @@ app.post('/api/declarations', async (req, res) => {
 
   } catch (err) {
     console.error('Erreur insertion déclaration:', err);
-    res.status(500).json({ error: 'Erreur lors de l’enregistrement de la déclaration.' });
+    res.status(500).json({ error: 'Erreur DB: ' + err.message });
   }
 });
 
-// 2. POST /api/staff/login - Connexion Agent/Superviseur
+// 2. POST /api/staff/login
 app.post('/api/staff/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -129,7 +170,7 @@ app.post('/api/staff/login', async (req, res) => {
   }
 });
 
-// 3. GET /api/staff/declarations - Consultation par les agents
+// 3. GET /api/staff/declarations
 app.get('/api/staff/declarations', authenticateToken, async (req, res) => {
   try {
     const { flight, date, search } = req.query;
@@ -157,7 +198,7 @@ app.get('/api/staff/declarations', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. PATCH /api/staff/declarations/:id - Verification et validation par agent
+// 4. PATCH /api/staff/declarations/:id
 app.patch('/api/staff/declarations/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
