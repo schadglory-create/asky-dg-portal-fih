@@ -3,13 +3,17 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// Servir les fichiers statiques depuis 'public' ET depuis la racine du projet
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/asky_dg_fih',
@@ -40,6 +44,20 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
+
+// Route racine explicite pour éviter "Cannot GET /"
+app.get('/', (req, res) => {
+  const publicIndex = path.join(__dirname, 'public', 'index.html');
+  const rootIndex = path.join(__dirname, 'index.html');
+
+  if (fs.existsSync(publicIndex)) {
+    return res.sendFile(publicIndex);
+  }
+  if (fs.existsSync(rootIndex)) {
+    return res.sendFile(rootIndex);
+  }
+  res.status(404).send('Fichier index.html introuvable dans le dépôt.');
+});
 
 // 1. POST /api/declarations - Soumission Passager (Portail Public)
 app.post('/api/declarations', async (req, res) => {
@@ -159,6 +177,6 @@ app.patch('/api/staff/declarations/:id', authenticateToken, async (req, res) => 
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Serveur ASKY Dangerous Goods FIH actif sur le port ${PORT}`);
 });
