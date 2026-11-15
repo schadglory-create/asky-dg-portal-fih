@@ -8,6 +8,51 @@ function switchLang(lang) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // 1. Pré-remplissage automatique de l'escale si scannée depuis l'affiche QR (?station=BZV)
+  const urlParams = new URLSearchParams(window.location.search);
+  const stationParam = urlParams.get('station');
+  const originSelect = document.getElementById('origin');
+  const stationBanner = document.getElementById('stationBanner');
+
+  if (stationParam && originSelect) {
+    const code = stationParam.trim().toUpperCase();
+    const matchingOption = Array.from(originSelect.options).find(opt => opt.value === code);
+    if (matchingOption) {
+      originSelect.value = code;
+      if (stationBanner) {
+        stationBanner.textContent = `Escale ${matchingOption.textContent}`;
+      }
+    }
+  }
+
+  // Mettre à jour le bandeau si le passager change manuellement l'escale
+  if (originSelect && stationBanner) {
+    originSelect.addEventListener('change', () => {
+      const selected = originSelect.options[originSelect.selectedIndex];
+      stationBanner.textContent = selected && selected.value
+        ? `Escale ${selected.textContent}`
+        : 'Réseau ASKY (KP)';
+    });
+  }
+
+  // 2. Date du jour par défaut pour fluidifier la saisie au comptoir
+  const flightDateInput = document.getElementById('flight_date');
+  if (flightDateInput && !flightDateInput.value) {
+    flightDateInput.value = new Date().toISOString().split('T')[0];
+  }
+
+  // 3. Formatage intelligent du N° de vol (préfixe KP automatique si le passager tape juste 031)
+  const flightInput = document.getElementById('flight_number');
+  if (flightInput) {
+    flightInput.addEventListener('blur', () => {
+      let val = flightInput.value.toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9]/g, '');
+      if (/^\d+$/.test(val)) {
+        val = 'KP' + val;
+      }
+      flightInput.value = val;
+    });
+  }
+
   const form = document.getElementById('passengerForm');
   if (!form) return;
 
@@ -21,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const payload = {
       passenger_name: document.getElementById('passenger_name').value.trim(),
-      booking_ref: document.getElementById('booking_ref').value.trim(),
       flight_number: document.getElementById('flight_number').value.trim(),
       flight_date: document.getElementById('flight_date').value,
       origin: document.getElementById('origin').value,
@@ -53,14 +97,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const ref = data.declaration.declaration_ref;
       document.getElementById('displayRef').textContent = ref;
 
-      // URL encodée dans le QR Code du passager : ouvre directement le dashboard agent sur ce dossier
       const scanUrl = `${window.location.origin}/staff.html?ref=${encodeURIComponent(ref)}&scan=1`;
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(scanUrl)}`;
 
       const qrImg = document.getElementById('passengerQrImg');
-      if (qrImg) {
-        qrImg.src = qrApiUrl;
-      }
+      if (qrImg) qrImg.src = qrApiUrl;
 
       const dlBtn = document.getElementById('downloadQrBtn');
       if (dlBtn) {
