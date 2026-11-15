@@ -2,6 +2,7 @@ let authToken = localStorage.getItem('asky_staff_token') || '';
 let currentUser = JSON.parse(localStorage.getItem('asky_staff_user') || 'null');
 let currentDeclarations = [];
 let autoActionTriggered = false;
+let activeVerifyId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -21,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const username = document.getElementById('username').value.trim();
+      const username = document.getElementById('username').value.trim().toUpperCase();
       const password = document.getElementById('password').value;
 
       try {
@@ -44,20 +45,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showDashboard();
       } catch (err) {
-        console.error('Erreur login:', err);
         alert('Erreur de connexion au serveur.');
       }
     });
   }
 
-  // Support douchette QR USB dans le champ de recherche
   const searchInput = document.getElementById('filterSearch');
   if (searchInput) {
     searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         let val = searchInput.value.trim();
-        // Si la douchette colle l'URL complète du QR Code, on extrait uniquement la référence ASKY-FIH-...
         if (val.includes('ref=')) {
           try {
             const parsed = new URL(val);
@@ -81,23 +79,42 @@ function showDashboard() {
   document.getElementById('loginSection').classList.add('hidden');
   document.getElementById('dashboardSection').classList.remove('hidden');
 
+  const headerTitle = document.getElementById('staffHeaderTitle');
+  if (headerTitle && currentUser) {
+    headerTitle.textContent = currentUser.role === 'SUPER_ADMIN'
+      ? 'ASKY Dangerous Goods Portal — Supervision Réseau (HQ)'
+      : `ASKY Dangerous Goods Portal — Escale ${currentUser.station_code}`;
+  }
+
   const userInfo = document.getElementById('userInfo');
   if (userInfo && currentUser) {
     userInfo.innerHTML = `
-      <span>Agent : <strong>${currentUser.full_name || currentUser.username}</strong> (${currentUser.role})</span>
-      <button onclick="logout()" class="btn-secondary" style="margin-left:12px;">Déconnexion</button>
+      <span>Station : <strong>${currentUser.username}</strong></span>
+      <button onclick="openModal('changePwdModal')" class="btn-secondary" style="margin-left:10px; font-size:12px;">Mot de passe</button>
+      <button onclick="logout()" class="btn-secondary" style="margin-left:6px; font-size:12px;">Déconnexion</button>
     `;
   }
 
-  // Pré-remplir la recherche si arrivée via scan QR Code
+  // Filtrer automatiquement sur l'escale connectée (sauf ADMIN qui voit tout par défaut)
+  const stationSelect = document.getElementById('filterStation');
+  if (stationSelect && currentUser) {
+    stationSelect.value = currentUser.station_code && currentUser.station_code !== 'ALL'
+      ? currentUser.station_code
+      : 'ALL';
+  }
+
+  if (currentUser && currentUser.role === 'SUPER_ADMIN') {
+    loadAdminStations();
+  }
+
   const pendingRef = sessionStorage.getItem('asky_pending_scan_ref');
   const searchInput = document.getElementById('filterSearch');
   if (pendingRef && searchInput) {
     searchInput.value = pendingRef;
+    // En cas de scan QR direct, chercher sur toutes les escales pour ne pas manquer une correspondance
+    if (stationSelect) stationSelect.value = 'ALL';
   }
-  if (searchInput) {
-    searchInput.focus();
-  }
+  if (searchInput) searchInput.focus();
 
   loadDeclarations();
 }
@@ -111,20 +128,20 @@ function logout() {
 }
 
 async function loadDeclarations() {
+  const station = document.getElementById('filterStation').value;
   const flight = document.getElementById('filterFlight').value.trim();
   const date = document.getElementById('filterDate').value;
   const search = document.getElementById('filterSearch').value.trim();
 
   const params = new URLSearchParams();
+  if (station) params.append('station', station);
   if (flight) params.append('flight', flight);
   if (date) params.append('date', date);
   if (search) params.append('search', search);
 
   try {
     const res = await fetch(`/api/staff/declarations?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      }
+      headers: { 'Authorization': `Bearer ${authToken}` }
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -136,7 +153,6 @@ async function loadDeclarations() {
     const list = Array.isArray(declarations) ? declarations : [];
     renderTable(list);
 
-    // Déclenchement automatique de l'action de validation si ouvert par scan QR
     const pendingRef = sessionStorage.getItem('asky_pending_scan_ref');
     const shouldTriggerAction = sessionStorage.getItem('asky_pending_scan_action') === '1';
 
@@ -145,19 +161,17 @@ async function loadDeclarations() {
       autoActionTriggered = true;
       sessionStorage.removeItem('asky_pending_scan_ref');
       sessionStorage.removeItem('asky_pending_scan_action');
-      // Nettoyer l'URL sans recharger la page
       window.history.replaceState({}, document.title, '/staff.html');
 
       if (target.status !== 'VERIFIED_OK') {
-        setTimeout(() => verifyDeclaration(target.id), 250);
+        setTimeout(() => openVerifyModal(target.id), 200);
       } else {
         alert(`Dossier ${target.declaration_ref} (${target.passenger_name}) déjà vérifié OK.`);
       }
     }
   } catch (err) {
-    console.error('Erreur chargement déclarations:', err);
     document.getElementById('declarationsTable').innerHTML =
-      '<tr><td colspan="8" style="text-align:center;color:red;">Erreur de chargement des données.</td></tr>';
+      '<tr><td colspan="7" style="text-align:center;color:red;">Erreur de chargement des données.</td></tr>';
   }
 }
 
@@ -165,7 +179,7 @@ function renderTable(rows) {
   currentDeclarations = rows || [];
   const tbody = document.getElementById('declarationsTable');
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Aucune déclaration trouvée.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Aucune déclaration trouvée.</td></tr>';
     return;
   }
 
@@ -181,27 +195,37 @@ function renderTable(rows) {
       <tr style="${highlightStyle}">
         <td><strong>${d.declaration_ref}</strong></td>
         <td>${d.passenger_name}</td>
-        <td>${d.booking_ref}</td>
-        <td>${d.flight_number} <br><small>${fDate}</small></td>
-        <td>${d.origin || 'FIH'} → ${d.destination}</td>
+        <td><strong>${d.flight_number}</strong><br><small>${fDate}</small></td>
+        <td>${d.origin} → ${d.destination}</td>
         <td>${q5Alert}</td>
         <td><span class="badge">${d.status}</span></td>
         <td>
           ${d.status !== 'VERIFIED_OK'
-            ? `<button onclick="verifyDeclaration(${d.id})" class="btn-primary" style="padding:4px 8px;font-size:12px;">Valider OK</button>`
-            : '<span style="color:#15803d;font-weight:bold;">✔ Vérifié</span>'}
+            ? `<button onclick="openVerifyModal(${d.id})" class="btn-primary" style="padding:5px 10px;font-size:12px;">Contrôler / Valider</button>`
+            : `<span style="color:#15803d;font-weight:bold;">✔ Vérifié</span> <button onclick="openVerifyModal(${d.id})" class="btn-secondary" style="padding:2px 6px;font-size:11px;margin-left:4px;">Modifier</button>`}
         </td>
       </tr>
     `;
   }).join('');
 }
 
-async function verifyDeclaration(id) {
-  const notes = prompt('Notes d’inspection agent (optionnel) :', 'Contrôle visuel conforme SKK-GRH-REC-015');
-  if (notes === null) return;
+function openVerifyModal(id) {
+  const item = currentDeclarations.find(d => d.id === id);
+  if (!item) return;
+  activeVerifyId = id;
+  document.getElementById('verifyPassengerInfo').textContent = `${item.passenger_name} (${item.declaration_ref})`;
+  document.getElementById('verifyFlightInput').value = item.flight_number || '';
+  document.getElementById('verifyNotesInput').value = item.agent_notes || 'Contrôle visuel conforme SKK-GRH-REC-015';
+  openModal('verifyModal');
+}
+
+async function confirmVerifyDeclaration() {
+  if (!activeVerifyId) return;
+  const correctedFlight = document.getElementById('verifyFlightInput').value.trim().toUpperCase();
+  const notes = document.getElementById('verifyNotesInput').value.trim();
 
   try {
-    const res = await fetch(`/api/staff/declarations/${id}`, {
+    const res = await fetch(`/api/staff/declarations/${activeVerifyId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -209,22 +233,159 @@ async function verifyDeclaration(id) {
       },
       body: JSON.stringify({
         status: 'VERIFIED_OK',
+        flight_number: correctedFlight,
         agent_notes: notes
       })
     });
 
     if (!res.ok) {
-      alert('Impossible de mettre à jour le statut.');
+      alert('Impossible de mettre à jour la déclaration.');
       return;
     }
 
-    // Réinitialiser le filtre après validation pour réafficher tous les passagers du vol
+    closeModal('verifyModal');
     document.getElementById('filterSearch').value = '';
+    if (currentUser && currentUser.station_code && currentUser.station_code !== 'ALL') {
+      document.getElementById('filterStation').value = currentUser.station_code;
+    }
     loadDeclarations();
   } catch (err) {
-    console.error('Erreur validation:', err);
     alert('Erreur réseau lors de la validation.');
   }
+}
+
+function openBulkFlightModal() {
+  const currentFilterDate = document.getElementById('filterDate').value || new Date().toISOString().split('T')[0];
+  document.getElementById('bulkDate').value = currentFilterDate;
+  document.getElementById('bulkWrongFlight').value = '';
+  document.getElementById('bulkCorrectFlight').value = '';
+  openModal('bulkFlightModal');
+}
+
+async function submitBulkFlightFix() {
+  const flightDate = document.getElementById('bulkDate').value;
+  const wrongFlight = document.getElementById('bulkWrongFlight').value.trim();
+  const correctFlight = document.getElementById('bulkCorrectFlight').value.trim();
+  const station = document.getElementById('filterStation').value;
+
+  if (!flightDate || !wrongFlight || !correctFlight) {
+    alert('Veuillez remplir tous les champs.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/staff/bulk-fix-flight', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ station, flightDate, wrongFlight, correctFlight })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Erreur lors de la correction.');
+      return;
+    }
+    alert(data.message);
+    closeModal('bulkFlightModal');
+    loadDeclarations();
+  } catch (err) {
+    alert('Erreur réseau.');
+  }
+}
+
+async function submitChangePassword() {
+  const currentPassword = document.getElementById('oldPwdInput').value;
+  const newPassword = document.getElementById('newPwdInput').value;
+
+  try {
+    const res = await fetch('/api/staff/change-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Erreur.');
+      return;
+    }
+    alert(data.message);
+    closeModal('changePwdModal');
+  } catch (err) {
+    alert('Erreur réseau.');
+  }
+}
+
+function openEmergencyResetModal(e) {
+  if (e) e.preventDefault();
+  document.getElementById('resetStationInput').value = document.getElementById('username').value.trim().toUpperCase();
+  document.getElementById('resetMasterKeyInput').value = '';
+  openModal('emergencyResetModal');
+}
+
+async function submitEmergencyReset() {
+  const username = document.getElementById('resetStationInput').value.trim();
+  const masterKey = document.getElementById('resetMasterKeyInput').value.trim();
+
+  try {
+    const res = await fetch('/api/staff/emergency-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, masterKey })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Erreur.');
+      return;
+    }
+    alert(data.message);
+    closeModal('emergencyResetModal');
+  } catch (err) {
+    alert('Erreur réseau.');
+  }
+}
+
+async function loadAdminStations() {
+  try {
+    const res = await fetch('/api/staff/stations', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!res.ok) return;
+    const stations = await res.json();
+    const panel = document.getElementById('superAdminPanel');
+    const container = document.getElementById('stationsAdminList');
+    panel.classList.remove('hidden');
+
+    container.innerHTML = stations
+      .filter(s => s.username !== 'ADMIN')
+      .map(s => `
+        <button onclick="adminResetStation('${s.username}')" class="btn-secondary" style="font-size:12px; padding:6px 10px;">
+          Reset <strong>${s.username}</strong>
+        </button>
+      `).join('');
+  } catch (_) {}
+}
+
+async function adminResetStation(username) {
+  if (!confirm(`Réinitialiser le mot de passe de l'escale ${username} sur Asky2026 ?`)) return;
+  const res = await fetch(`/api/staff/admin-reset/${username}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${authToken}` }
+  });
+  const data = await res.json();
+  alert(data.message || 'Effectué.');
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
 }
 
 function exportToCSV() {
@@ -234,7 +395,7 @@ function exportToCSV() {
   }
 
   const headers = [
-    'Reference', 'Passager', 'PNR', 'Vol', 'Date_Vol',
+    'Reference', 'Passager', 'Vol', 'Date_Vol',
     'Origine', 'Destination', 'Alerte_Q5_Endommagee', 'Statut', 'Notes_Agent'
   ];
 
@@ -245,10 +406,9 @@ function exportToCSV() {
     const row = [
       d.declaration_ref,
       `"${(d.passenger_name || '').replace(/"/g, '""')}"`,
-      d.booking_ref,
       d.flight_number,
       fDate,
-      d.origin || 'FIH',
+      d.origin,
       d.destination,
       d.q5_damaged_defective_swollen ? 'OUI_INSPECTION' : 'NON',
       d.status,
@@ -260,11 +420,12 @@ function exportToCSV() {
   const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
+  const stationTag = document.getElementById('filterStation').value || 'RESEAU';
   const flightTag = document.getElementById('filterFlight').value.trim() || 'TOUS_VOLS';
   const dateTag = document.getElementById('filterDate').value || new Date().toISOString().split('T')[0];
 
   link.href = url;
-  link.download = `ASKY_DG_FIH_${flightTag}_${dateTag}.csv`;
+  link.download = `ASKY_DG_${stationTag}_${flightTag}_${dateTag}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
