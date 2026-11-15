@@ -3,6 +3,46 @@ let currentUser = JSON.parse(localStorage.getItem('asky_staff_user') || 'null');
 let currentDeclarations = [];
 let autoActionTriggered = false;
 let activeVerifyId = null;
+let resumeScanAfterSetup = false;
+
+const SCANNER_IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 heures d'inactivité max
+
+function getScannerConfig() {
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    const saved = JSON.parse(localStorage.getItem('asky_scanner_config') || 'null');
+    if (!saved || saved.date !== today || !saved.mode) return null;
+
+    if (saved.lastUsedAt && (Date.now() - saved.lastUsedAt > SCANNER_IDLE_TIMEOUT_MS)) {
+      localStorage.removeItem('asky_scanner_config');
+      return null;
+    }
+    return saved;
+  } catch (_) {}
+  return null;
+}
+
+function touchScannerActivity() {
+  const cfg = getScannerConfig();
+  if (cfg) {
+    cfg.lastUsedAt = Date.now();
+    localStorage.setItem('asky_scanner_config', JSON.stringify(cfg));
+  }
+}
+
+function updateScannerBanner() {
+  const cfg = getScannerConfig();
+  const statusEl = document.getElementById('activeFlightStatus');
+  if (!statusEl) return;
+
+  if (cfg && cfg.mode === 'FLIGHT') {
+    statusEl.innerHTML = `<span style="background:#15803d; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;">Escale ${cfg.origin} — Vol ${cfg.flight}</span> <small>(Expire après 2h d'inactivité)</small>`;
+  } else if (cfg && cfg.mode === 'MULTI_FLIGHT') {
+    statusEl.innerHTML = `<span style="background:#2563eb; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold;">Mode Multi-Vols (${cfg.origin || 'Réseau'})</span> <small>(Saisie passager conservée)</small>`;
+  } else {
+    statusEl.textContent = 'Prêt — Le numéro de vol sera demandé au prochain scan QR';
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -95,7 +135,8 @@ function showDashboard() {
     `;
   }
 
-  // Filtrer automatiquement sur l'escale connectée (sauf ADMIN qui voit tout par défaut)
+  updateScannerBanner();
+
   const stationSelect = document.getElementById('filterStation');
   if (stationSelect && currentUser) {
     stationSelect.value = currentUser.station_code && currentUser.station_code !== 'ALL'
@@ -111,7 +152,6 @@ function showDashboard() {
   const searchInput = document.getElementById('filterSearch');
   if (pendingRef && searchInput) {
     searchInput.value = pendingRef;
-    // En cas de scan QR direct, chercher sur toutes les escales pour ne pas manquer une correspondance
     if (stationSelect) stationSelect.value = 'ALL';
   }
   if (searchInput) searchInput.focus();
@@ -158,21 +198,135 @@ async function loadDeclarations() {
 
     if (pendingRef && shouldTriggerAction && !autoActionTriggered && list.length === 1) {
       const target = list[0];
+      const scannerCfg = getScannerConfig();
+
+      if (!scannerCfg) {
+        openScannerSetupModal(true);
+        return;
+      }
+
       autoActionTriggered = true;
       sessionStorage.removeItem('asky_pending_scan_ref');
       sessionStorage.removeItem('asky_pending_scan_action');
       window.history.replaceState({}, document.title, '/staff.html');
 
-      if (target.status !== 'VERIFIED_OK') {
-        setTimeout(() => openVerifyModal(target.id), 200);
-      } else {
-        alert(`Dossier ${target.declaration_ref} (${target.passenger_name}) déjà vérifié OK.`);
-      }
+      await processScannedDeclaration(target, scannerCfg);
     }
   } catch (err) {
     document.getElementById('declarationsTable').innerHTML =
       '<tr><td colspan="7" style="text-align:center;color:red;">Erreur de chargement des données.</td></tr>';
   }
+}
+
+async function processScannedDeclaration(target, scannerCfg) {
+  touchScannerActivity();
+  let wasAutoFixed = false;
+  let fixDetails = [];
+
+  if (scannerCfg.mode === 'FLIGHT') {
+    const needsFlightFix = scannerCfg.flight && target.flight_number !== scannerCfg.flight;
+    const needsOriginFix = scannerCfg.origin && target.origin !== scannerCfg.origin;
+
+    if (needsFlightFix || needsOriginFix) {
+      try {
+        const patchRes = await fetch(`/api/staff/declarations/${target.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            flight_number: scannerCfg.flight,
+            origin: scannerCfg.origin
+          })
+        });
+
+        if (patchRes.ok) {
+          const updated = await patchRes.json();
+          if (needsFlightFix) fixDetails.push(`Vol corrigé : ${target.flight_number} → ${updated.flight_number}`);
+          if (needsOriginFix) fixDetails.push(`Escale corrigée : ${target.origin} → ${updated.origin}`);
+          target.flight_number = updated.flight_number;
+          target.origin = updated.origin;
+          wasAutoFixed = true;
+          const idx = currentDeclarations.findIndex(d => d.id === target.id);
+          if (idx !== -1) currentDeclarations[idx] = target;
+          renderTable(currentDeclarations);
+        }
+      } catch (_) {}
+    }
+  }
+
+  openVerifyModal(target.id, wasAutoFixed ? fixDetails.join(' | ') : '');
+}
+
+function openScannerSetupModal(fromScan = false) {
+  resumeScanAfterSetup = fromScan;
+  const cfg = getScannerConfig();
+  const originSelect = document.getElementById('setupOriginSelect');
+  const flightInput = document.getElementById('setupFlightInput');
+
+  if (cfg) {
+    originSelect.value = cfg.origin;
+    flightInput.value = cfg.flight;
+  } else {
+    if (currentUser && currentUser.station_code && currentUser.station_code !== 'ALL') {
+      originSelect.value = currentUser.station_code;
+    }
+    flightInput.value = '';
+  }
+  openModal('scannerSetupModal');
+  setTimeout(() => flightInput.focus(), 100);
+}
+
+function saveScannerConfig() {
+  const origin = document.getElementById('setupOriginSelect').value.trim().toUpperCase();
+  let flight = document.getElementById('setupFlightInput').value.trim().toUpperCase().replace(/\s+/g, '');
+  if (/^\d+$/.test(flight)) flight = 'KP' + flight;
+
+  const today = new Date().toISOString().split('T')[0];
+  const mode = flight ? 'FLIGHT' : 'MULTI_FLIGHT';
+
+  localStorage.setItem('asky_scanner_config', JSON.stringify({
+    mode,
+    origin,
+    flight,
+    date: today,
+    lastUsedAt: Date.now()
+  }));
+
+  updateScannerBanner();
+  closeModal('scannerSetupModal');
+
+  if (resumeScanAfterSetup) {
+    resumeScanAfterSetup = false;
+    loadDeclarations();
+  }
+}
+
+function ignoreScannerConfig() {
+  const origin = document.getElementById('setupOriginSelect').value.trim().toUpperCase();
+  const today = new Date().toISOString().split('T')[0];
+  localStorage.setItem('asky_scanner_config', JSON.stringify({
+    mode: 'MULTI_FLIGHT',
+    origin,
+    flight: '',
+    date: today,
+    lastUsedAt: Date.now()
+  }));
+
+  updateScannerBanner();
+  closeModal('scannerSetupModal');
+
+  if (resumeScanAfterSetup) {
+    resumeScanAfterSetup = false;
+    loadDeclarations();
+  }
+}
+
+function resetScannerFlight() {
+  localStorage.removeItem('asky_scanner_config');
+  updateScannerBanner();
+  alert('Configuration du vol réinitialisée. Le nouveau numéro de vol sera demandé au prochain scan.');
 }
 
 function renderTable(rows) {
@@ -209,18 +363,35 @@ function renderTable(rows) {
   }).join('');
 }
 
-function openVerifyModal(id) {
+function openVerifyModal(id, autoFixMessage = '') {
   const item = currentDeclarations.find(d => d.id === id);
   if (!item) return;
   activeVerifyId = id;
+
+  const cfg = getScannerConfig();
+  const isDedicatedFlight = cfg && cfg.mode === 'FLIGHT';
+
   document.getElementById('verifyPassengerInfo').textContent = `${item.passenger_name} (${item.declaration_ref})`;
-  document.getElementById('verifyFlightInput').value = item.flight_number || '';
+  document.getElementById('verifyOriginInput').value = isDedicatedFlight ? cfg.origin : (item.origin || '');
+  document.getElementById('verifyFlightInput').value = isDedicatedFlight ? cfg.flight : (item.flight_number || '');
   document.getElementById('verifyNotesInput').value = item.agent_notes || 'Contrôle visuel conforme SKK-GRH-REC-015';
+
+  const noticeEl = document.getElementById('autoFixNotice');
+  if (noticeEl) {
+    if (autoFixMessage) {
+      noticeEl.textContent = `✔ Auto-correction appliquée : ${autoFixMessage}`;
+      noticeEl.classList.remove('hidden');
+    } else {
+      noticeEl.classList.add('hidden');
+    }
+  }
+
   openModal('verifyModal');
 }
 
 async function confirmVerifyDeclaration() {
   if (!activeVerifyId) return;
+  const correctedOrigin = document.getElementById('verifyOriginInput').value.trim().toUpperCase();
   const correctedFlight = document.getElementById('verifyFlightInput').value.trim().toUpperCase();
   const notes = document.getElementById('verifyNotesInput').value.trim();
 
@@ -233,6 +404,7 @@ async function confirmVerifyDeclaration() {
       },
       body: JSON.stringify({
         status: 'VERIFIED_OK',
+        origin: correctedOrigin,
         flight_number: correctedFlight,
         agent_notes: notes
       })
