@@ -2,32 +2,86 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>ASKY FIH - QR Code Déclaration Batteries</title>
+  <title>ASKY Réseau - Affiche QR Code Déclaration Batteries</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f8f9fa; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 30px; background: #f8f9fa; }
+    .controls { max-width: 480px; margin: 0 auto 20px auto; background: #fff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    select { padding: 8px 12px; font-size: 15px; border-radius: 6px; border: 1px solid #d1d5db; width: 100%; margin-top: 6px; }
     .poster { background: #fff; max-width: 480px; margin: auto; padding: 30px; border-radius: 12px; border-top: 10px solid #8B0000; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     h1 { color: #8B0000; margin-bottom: 5px; font-size: 36px; }
-    .badge { background: #F59E0B; color: #000; font-weight: bold; padding: 5px 14px; border-radius: 6px; display: inline-block; margin-bottom: 20px; }
+    .badge { background: #F59E0B; color: #000; font-weight: bold; padding: 6px 16px; border-radius: 6px; display: inline-block; margin-bottom: 20px; font-size: 16px; }
     img { margin: 20px 0; border: 2px solid #eee; padding: 10px; border-radius: 8px; }
-    .url { font-size: 16px; font-weight: bold; color: #1f2937; background: #f3f4f6; padding: 10px; border-radius: 6px; word-break: break-all; }
-    @media print { button { display: none; } body { background: #fff; padding: 0; } .poster { box-shadow: none; } }
+    .url { font-size: 15px; font-weight: bold; color: #1f2937; background: #f3f4f6; padding: 10px; border-radius: 6px; word-break: break-all; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff; padding: 0; }
+      .poster { box-shadow: none; }
+    }
   </style>
 </head>
 <body>
+  <div class="controls no-print">
+    <label for="stationSelector"><strong>Choisir l'escale pour l'affiche comptoir :</strong></label>
+    <select id="stationSelector" onchange="updatePoster()">
+      <option value="FIH">Kinshasa (FIH)</option>
+      <option value="BZV">Brazzaville (BZV)</option>
+      <option value="LFW">Lomé (LFW)</option>
+      <option value="ABJ">Abidjan (ABJ)</option>
+      <option value="ACC">Accra (ACC)</option>
+      <option value="LOS">Lagos (LOS)</option>
+      <option value="ABV">Abuja (ABV)</option>
+      <option value="DLA">Douala (DLA)</option>
+      <option value="NSI">Yaoundé (NSI)</option>
+      <option value="LBV">Libreville (LBV)</option>
+      <option value="COO">Cotonou (COO)</option>
+      <option value="BKO">Bamako (BKO)</option>
+      <option value="OUA">Ouagadougou (OUA)</option>
+      <option value="NIM">Niamey (NIM)</option>
+      <option value="DKR">Dakar (DKR)</option>
+      <option value="CKY">Conakry (CKY)</option>
+      <option value="FNA">Freetown (FNA)</option>
+      <option value="BJL">Banjul (BJL)</option>
+      <option value="OXB">Bissau (OXB)</option>
+      <option value="NDJ">N'Djamena (NDJ)</option>
+      <option value="BGF">Bangui (BGF)</option>
+      <option value="LAD">Luanda (LAD)</option>
+      <option value="PNR">Pointe-Noire (PNR)</option>
+      <option value="SSG">Malabo (SSG)</option>
+      <option value="TMS">São Tomé (TMS)</option>
+      <option value="ROB">Monrovia (ROB)</option>
+      <option value="JNB">Johannesburg (JNB)</option>
+    </select>
+  </div>
+
   <div class="poster">
     <h1>ASKY</h1>
-    <div class="badge">Station Kinshasa (FIH)</div>
+    <div class="badge" id="stationBadge">Station Kinshasa (FIH)</div>
     <h2>Déclaration Batteries & Power Banks</h2>
     <p>Scannez ce QR Code avec votre téléphone avant l'enregistrement :<br><em>Scan this QR Code before check-in:</em></p>
-    <img id="qrImg" alt="QR Code ASKY FIH" width="240" height="240">
+    <img id="qrImg" alt="QR Code ASKY" width="240" height="240">
     <div class="url" id="portalUrl"></div>
     <p style="font-size: 12px; color: #6b7280; margin-top: 15px;">Ref: SKK-GRH-REC-015 – Rev 01 – June 2026</p>
-    <button onclick="window.print()" style="margin-top:15px; padding:10px 20px; background:#8B0000; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Imprimer l'affiche A4</button>
+    <button class="no-print" onclick="window.print()" style="margin-top:15px; padding:10px 20px; background:#8B0000; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Imprimer l'affiche A4</button>
   </div>
+
   <script>
-    const targetUrl = window.location.origin + '/';
-    document.getElementById('portalUrl').textContent = targetUrl;
-    document.getElementById('qrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(targetUrl);
+    function updatePoster() {
+      const sel = document.getElementById('stationSelector');
+      const code = sel.value;
+      const label = sel.options[sel.selectedIndex].text;
+      const targetUrl = `${window.location.origin}/?station=${code}`;
+
+      document.getElementById('stationBadge').textContent = `Station ${label}`;
+      document.getElementById('portalUrl').textContent = targetUrl;
+      document.getElementById('qrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(targetUrl);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const initialStation = params.get('station');
+    if (initialStation) {
+      document.getElementById('stationSelector').value = initialStation.toUpperCase();
+    }
+    updatePoster();
   </script>
 </body>
 </html>
