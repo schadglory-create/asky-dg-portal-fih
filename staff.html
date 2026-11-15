@@ -34,6 +34,23 @@
 
     <!-- TABLEAU DE BORD MULTI-STATIONS -->
     <div id="dashboardSection" class="hidden">
+
+      <!-- BANDEAU VOL ACTIF DU SCANNER (EXPIRATION 2H + BOUTON CHANGER/RAFRAÎCHIR) -->
+      <div id="activeScannerBanner" class="card" style="background:#fffbeb; border-left:5px solid #F59E0B; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:14px 20px;">
+        <div>
+          <strong style="color:#92400e;">Configuration Scanner :</strong>
+          <span id="activeFlightStatus" style="margin-left:6px; color:#1f2937;">Prêt — Le numéro de vol sera demandé au prochain scan QR</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button onclick="openScannerSetupModal(false)" class="btn-secondary" style="background:#F59E0B; color:#000; border:none;">
+            Changer de vol
+          </button>
+          <button onclick="resetScannerFlight()" class="btn-secondary" title="Effacer le vol mémorisé pour redemander au prochain scan">
+            ↻ Rafraîchir
+          </button>
+        </div>
+      </div>
+
       <div class="filter-bar card" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
         <select id="filterStation" style="padding:8px; border-radius:6px; border:1px solid #d1d5db;">
           <option value="ALL">Toutes les escales (Réseau)</option>
@@ -103,13 +120,69 @@
     </div>
   </div>
 
+  <!-- MODALE CONFIGURATION VOL AU 1ER SCAN QR (AVEC OPTION IGNORER POUR MULTI-VOLS) -->
+  <div id="scannerSetupModal" class="modal hidden">
+    <div class="modal-content" style="max-width:450px; border-top:6px solid #F59E0B;">
+      <h3>Configuration du Scanner d'Embarquement</h3>
+      <p style="font-size:13px; color:#4b5563;">
+        Si vous gérez <strong>un seul vol</strong> (porte d'embarquement), saisissez son numéro pour corriger automatiquement les erreurs passagers.<br>
+        Si vous gérez <strong>plusieurs vols simultanément</strong> (comptoir multi-vols LFW/ACC), cliquez sur <strong>Ignorer</strong>.
+      </p>
+      <div class="form-group">
+        <label>Station d'origine (Escale de départ)</label>
+        <select id="setupOriginSelect">
+          <option value="LFW">Lomé (LFW)</option>
+          <option value="FIH">Kinshasa (FIH)</option>
+          <option value="BZV">Brazzaville (BZV)</option>
+          <option value="ABJ">Abidjan (ABJ)</option>
+          <option value="ACC">Accra (ACC)</option>
+          <option value="LOS">Lagos (LOS)</option>
+          <option value="ABV">Abuja (ABV)</option>
+          <option value="DLA">Douala (DLA)</option>
+          <option value="NSI">Yaoundé (NSI)</option>
+          <option value="LBV">Libreville (LBV)</option>
+          <option value="COO">Cotonou (COO)</option>
+          <option value="BKO">Bamako (BKO)</option>
+          <option value="OUA">Ouagadougou (OUA)</option>
+          <option value="NIM">Niamey (NIM)</option>
+          <option value="DKR">Dakar (DKR)</option>
+          <option value="CKY">Conakry (CKY)</option>
+          <option value="FNA">Freetown (FNA)</option>
+          <option value="BJL">Banjul (BJL)</option>
+          <option value="OXB">Bissau (OXB)</option>
+          <option value="NDJ">N'Djamena (NDJ)</option>
+          <option value="BGF">Bangui (BGF)</option>
+          <option value="LAD">Luanda (LAD)</option>
+          <option value="PNR">Pointe-Noire (PNR)</option>
+          <option value="SSG">Malabo (SSG)</option>
+          <option value="TMS">São Tomé (TMS)</option>
+          <option value="ROB">Monrovia (ROB)</option>
+          <option value="JNB">Johannesburg (JNB)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Numéro du vol dédié (laisser vide si multi-vols)</label>
+        <input type="text" id="setupFlightInput" placeholder="Ex: KP031" style="text-transform:uppercase; font-weight:bold;">
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px;">
+        <button onclick="ignoreScannerConfig()" class="btn-secondary">Ignorer (Multi-vols)</button>
+        <button onclick="saveScannerConfig()" class="btn-primary">Appliquer ce vol</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODALE VALIDATION + CORRECTION N° DE VOL -->
   <div id="verifyModal" class="modal hidden">
     <div class="modal-content" style="max-width:440px;">
       <h3>Contrôle & Validation Embarquement</h3>
       <p id="verifyPassengerInfo" style="font-weight:bold; color:#1f2937;"></p>
+      <div id="autoFixNotice" class="hidden" style="background:#dcfce7; color:#166534; padding:8px 10px; border-radius:6px; font-size:13px; margin-bottom:12px;"></div>
       <div class="form-group">
-        <label>N° de vol (corriger ici si le passager a fait une erreur)</label>
+        <label>Escale d'origine</label>
+        <input type="text" id="verifyOriginInput" style="text-transform:uppercase; font-weight:bold;" maxlength="3">
+      </div>
+      <div class="form-group">
+        <label>N° de vol (corrigé automatiquement si configuré)</label>
         <input type="text" id="verifyFlightInput" style="text-transform:uppercase; font-weight:bold;">
       </div>
       <div class="form-group">
