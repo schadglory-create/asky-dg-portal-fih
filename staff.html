@@ -3,60 +3,189 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ASKY Staff - Dashboard FIH</title>
+  <title>ASKY Staff - Contrôle Réseau</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-light">
   <div class="staff-container">
     <header class="staff-header">
-      <h2>ASKY Dangerous Goods Portal - Boarding Control (FIH)</h2>
+      <h2 id="staffHeaderTitle">ASKY Dangerous Goods Portal - Boarding Control</h2>
       <div id="userInfo"></div>
     </header>
 
-    <div id="loginSection" class="card">
-      <h3>Accès Agent / Superviseur</h3>
+    <!-- CONNEXION PAR CODE STATION (ex: FIH, BZV, LFW, ADMIN) -->
+    <div id="loginSection" class="card" style="max-width:440px; margin:30px auto;">
+      <h3>Accès Escale / Supervision</h3>
       <form id="loginForm">
         <div class="form-group">
-          <label>Identifiant</label>
-          <input type="text" id="username" required>
+          <label>Code Station IATA (ex: FIH, BZV, LFW, ADMIN)</label>
+          <input type="text" id="username" required placeholder="Ex: FIH" style="text-transform:uppercase;">
         </div>
         <div class="form-group">
           <label>Mot de passe</label>
-          <input type="password" id="password" required>
+          <input type="password" id="password" required placeholder="••••••••">
         </div>
-        <button type="submit" class="btn-primary">Se connecter</button>
+        <button type="submit" class="btn-primary" style="width:100%;">Se connecter</button>
       </form>
+      <div style="margin-top:14px; text-align:center;">
+        <a href="#" onclick="openEmergencyResetModal(event)" style="font-size:13px; color:#8B0000;">Mot de passe oublié / Débloquer une station ?</a>
+      </div>
     </div>
 
+    <!-- TABLEAU DE BORD MULTI-STATIONS -->
     <div id="dashboardSection" class="hidden">
-      <div class="filter-bar card">
-        <input type="text" id="filterFlight" placeholder="N° Vol (ex: KP045)">
+      <div class="filter-bar card" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <select id="filterStation" style="padding:8px; border-radius:6px; border:1px solid #d1d5db;">
+          <option value="ALL">Toutes les escales (Réseau)</option>
+          <option value="LFW">Lomé (LFW)</option>
+          <option value="FIH">Kinshasa (FIH)</option>
+          <option value="BZV">Brazzaville (BZV)</option>
+          <option value="ABJ">Abidjan (ABJ)</option>
+          <option value="ACC">Accra (ACC)</option>
+          <option value="LOS">Lagos (LOS)</option>
+          <option value="ABV">Abuja (ABV)</option>
+          <option value="DLA">Douala (DLA)</option>
+          <option value="NSI">Yaoundé (NSI)</option>
+          <option value="LBV">Libreville (LBV)</option>
+          <option value="COO">Cotonou (COO)</option>
+          <option value="BKO">Bamako (BKO)</option>
+          <option value="OUA">Ouagadougou (OUA)</option>
+          <option value="NIM">Niamey (NIM)</option>
+          <option value="DKR">Dakar (DKR)</option>
+          <option value="CKY">Conakry (CKY)</option>
+          <option value="FNA">Freetown (FNA)</option>
+          <option value="BJL">Banjul (BJL)</option>
+          <option value="OXB">Bissau (OXB)</option>
+          <option value="NDJ">N'Djamena (NDJ)</option>
+          <option value="BGF">Bangui (BGF)</option>
+          <option value="LAD">Luanda (LAD)</option>
+          <option value="PNR">Pointe-Noire (PNR)</option>
+          <option value="SSG">Malabo (SSG)</option>
+          <option value="TMS">São Tomé (TMS)</option>
+          <option value="ROB">Monrovia (ROB)</option>
+          <option value="JNB">Johannesburg (JNB)</option>
+        </select>
+
+        <input type="text" id="filterFlight" placeholder="N° Vol (ex: KP031)" style="text-transform:uppercase;">
         <input type="date" id="filterDate">
-        <input type="text" id="filterSearch" placeholder="Nom passager, PNR ou Réf">
+        <input type="text" id="filterSearch" placeholder="Nom passager ou Réf (ASKY-...)">
         <button onclick="loadDeclarations()" class="btn-secondary">Filtrer</button>
+        <button onclick="openBulkFlightModal()" class="btn-secondary" style="background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">Corriger un N° de vol</button>
         <button onclick="exportToCSV()" class="btn-primary">Exporter CSV</button>
       </div>
 
       <div class="card">
-        <h3>Déclarations Récentes</h3>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Réf</th>
-              <th>Passager</th>
-              <th>PNR</th>
-              <th>Vol / Date</th>
-              <th>Destination</th>
-              <th>Alerte Risk (Q5)</th>
-              <th>Statut</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="declarationsTable"></tbody>
-        </table>
+        <h3>Déclarations Passagers</h3>
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Réf</th>
+                <th>Passager</th>
+                <th>Vol / Date</th>
+                <th>Trajet</th>
+                <th>Alerte Risk (Q5)</th>
+                <th>Statut</th>
+                <th>Action / Validation</th>
+              </tr>
+            </thead>
+            <tbody id="declarationsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PANNEAU SUPER-ADMIN UNIQUEMENT (ADMIN) -->
+      <div id="superAdminPanel" class="card hidden" style="margin-top:20px; border-top:4px solid #8B0000;">
+        <h3>Supervision Réseau — Réinitialisation des Comptes Escales</h3>
+        <p style="font-size:13px; color:#4b5563;">Remet le mot de passe d'une station sur le standard <strong>Asky2026</strong> en un clic.</p>
+        <div id="stationsAdminList" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
       </div>
     </div>
   </div>
+
+  <!-- MODALE VALIDATION + CORRECTION N° DE VOL -->
+  <div id="verifyModal" class="modal hidden">
+    <div class="modal-content" style="max-width:440px;">
+      <h3>Contrôle & Validation Embarquement</h3>
+      <p id="verifyPassengerInfo" style="font-weight:bold; color:#1f2937;"></p>
+      <div class="form-group">
+        <label>N° de vol (corriger ici si le passager a fait une erreur)</label>
+        <input type="text" id="verifyFlightInput" style="text-transform:uppercase; font-weight:bold;">
+      </div>
+      <div class="form-group">
+        <label>Notes d'inspection agent</label>
+        <input type="text" id="verifyNotesInput" value="Contrôle visuel conforme SKK-GRH-REC-015">
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+        <button onclick="closeModal('verifyModal')" class="btn-secondary">Annuler</button>
+        <button onclick="confirmVerifyDeclaration()" class="btn-primary">Valider OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE CORRECTION EN LOT D'UN N° DE VOL -->
+  <div id="bulkFlightModal" class="modal hidden">
+    <div class="modal-content" style="max-width:440px;">
+      <h3>Correction en lot d'un N° de vol</h3>
+      <p style="font-size:13px; color:#4b5563;">Corrige automatiquement tous les passagers d'un même vol ayant mal saisi le numéro.</p>
+      <div class="form-group">
+        <label>Date du vol</label>
+        <input type="date" id="bulkDate">
+      </div>
+      <div class="form-group">
+        <label>N° de vol erroné saisi par les passagers (ex: KP31)</label>
+        <input type="text" id="bulkWrongFlight" placeholder="Ex: KP31" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label>Bon N° de vol officiel (ex: KP031)</label>
+        <input type="text" id="bulkCorrectFlight" placeholder="Ex: KP031" style="text-transform:uppercase;">
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+        <button onclick="closeModal('bulkFlightModal')" class="btn-secondary">Annuler</button>
+        <button onclick="submitBulkFlightFix()" class="btn-primary">Appliquer la correction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE CHANGEMENT DE MOT DE PASSE ESCALE -->
+  <div id="changePwdModal" class="modal hidden">
+    <div class="modal-content" style="max-width:400px;">
+      <h3>Changer le mot de passe de l'escale</h3>
+      <div class="form-group">
+        <label>Mot de passe actuel</label>
+        <input type="password" id="oldPwdInput">
+      </div>
+      <div class="form-group">
+        <label>Nouveau mot de passe (min. 6 caractères)</label>
+        <input type="password" id="newPwdInput">
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+        <button onclick="closeModal('changePwdModal')" class="btn-secondary">Annuler</button>
+        <button onclick="submitChangePassword()" class="btn-primary">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE DÉBLOCAGE D'URGENCE PAR CODE MAÎTRE -->
+  <div id="emergencyResetModal" class="modal hidden">
+    <div class="modal-content" style="max-width:420px;">
+      <h3>Réinitialisation d'urgence Station</h3>
+      <p style="font-size:13px; color:#4b5563;">Saisissez le code IATA de l'escale et le <strong>Code Maître Réseau</strong> pour remettre le mot de passe sur <code>Asky2026</code>.</p>
+      <div class="form-group">
+        <label>Code Station IATA (ex: BZV, FIH)</label>
+        <input type="text" id="resetStationInput" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label>Code Maître Réseau</label>
+        <input type="password" id="resetMasterKeyInput">
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+        <button onclick="closeModal('emergencyResetModal')" class="btn-secondary">Annuler</button>
+        <button onclick="submitEmergencyReset()" class="btn-primary">Réinitialiser</button>
+      </div>
+    </div>
+  </div>
+
   <script src="staff.js"></script>
 </body>
 </html>
