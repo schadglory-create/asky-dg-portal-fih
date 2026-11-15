@@ -50,7 +50,6 @@ const ASKY_STATIONS = [
   { code: 'JNB', name: 'Johannesburg' }
 ];
 
-// Initialisation & migration automatique des tables Neon
 async function initDatabase() {
   try {
     await pool.query(`
@@ -90,14 +89,12 @@ async function initDatabase() {
       );
     `);
 
-    // Migrations douces si la table existait déjà
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS station_code VARCHAR(10) DEFAULT 'ALL'`);
     await pool.query(`ALTER TABLE declarations ALTER COLUMN booking_ref DROP NOT NULL`);
     await pool.query(`ALTER TABLE declarations ALTER COLUMN booking_ref SET DEFAULT 'N/A'`);
 
     const defaultHash = await bcrypt.hash('Asky2026', 10);
 
-    // Compte Super-Admin Réseau (ADMIN / Asky2026)
     await pool.query(
       `INSERT INTO users (username, password_hash, full_name, station_code, role)
        VALUES ($1, $2, $3, $4, $5)
@@ -105,7 +102,6 @@ async function initDatabase() {
       ['ADMIN', defaultHash, 'Supervision Réseau ASKY (HQ)', 'ALL', 'SUPER_ADMIN']
     );
 
-    // Création automatique d'un compte par escale ASKY (ex: FIH / Asky2026, BZV / Asky2026...)
     for (const st of ASKY_STATIONS) {
       await pool.query(
         `INSERT INTO users (username, password_hash, full_name, station_code, role)
@@ -121,7 +117,6 @@ async function initDatabase() {
   }
 }
 
-// Rotation automatique : purge > 90 jours & plafond 50 000 enregistrements
 async function cleanOldDeclarations() {
   try {
     const resDate = await pool.query(
@@ -234,7 +229,7 @@ app.post('/api/declarations', async (req, res) => {
   }
 });
 
-// 2. Connexion Escale / Super-Admin (insensible à la casse sur l'identifiant IATA)
+// 2. Connexion Escale / Super-Admin
 app.post('/api/staff/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -299,7 +294,7 @@ app.post('/api/staff/change-password', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. Réinitialisation d'urgence via Code Maître Réseau (sans être connecté)
+// 4. Réinitialisation d'urgence via Code Maître Réseau
 app.post('/api/staff/emergency-reset', async (req, res) => {
   try {
     const { username, masterKey } = req.body;
@@ -327,7 +322,7 @@ app.post('/api/staff/emergency-reset', async (req, res) => {
   }
 });
 
-// 5. Liste et réinitialisation des comptes escales (réservé SUPER_ADMIN)
+// 5. Liste et réinitialisation des comptes escales (SUPER_ADMIN)
 app.get('/api/staff/stations', authenticateToken, async (req, res) => {
   if (req.user.role !== 'SUPER_ADMIN') {
     return res.status(403).json({ error: 'Réservé à la Supervision Réseau.' });
@@ -348,7 +343,7 @@ app.post('/api/staff/admin-reset/:username', authenticateToken, async (req, res)
   res.json({ success: true, message: `Compte ${target} réinitialisé à Asky2026.` });
 });
 
-// 6. Consultation filtrée des déclarations (Station, Vol, Date, Recherche)
+// 6. Consultation filtrée des déclarations
 app.get('/api/staff/declarations', authenticateToken, async (req, res) => {
   try {
     const { station, flight, date, search } = req.query;
@@ -380,24 +375,26 @@ app.get('/api/staff/declarations', authenticateToken, async (req, res) => {
   }
 });
 
-// 7. Validation individuelle + correction du numéro de vol par le superviseur/agent
+// 7. Validation individuelle + correction automatique du vol et de l'escale par le scanner
 app.patch('/api/staff/declarations/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, agent_notes, flight_number } = req.body;
+    const { status, agent_notes, flight_number, origin } = req.body;
     const userId = req.user.id;
 
     const cleanFlight = flight_number ? normalizeFlightNumber(flight_number) : null;
+    const cleanOrigin = origin ? origin.trim().toUpperCase() : null;
 
     const result = await pool.query(
       `UPDATE declarations 
        SET status = COALESCE($1, status),
            agent_notes = COALESCE($2, agent_notes),
            flight_number = COALESCE($3, flight_number),
-           verified_by = $4,
+           origin = COALESCE($4, origin),
+           verified_by = $5,
            verified_at = CURRENT_TIMESTAMP 
-       WHERE id = $5 RETURNING *`,
-      [status, agent_notes, cleanFlight, userId, id]
+       WHERE id = $6 RETURNING *`,
+      [status, agent_notes, cleanFlight, cleanOrigin, userId, id]
     );
 
     res.json(result.rows[0]);
@@ -406,7 +403,7 @@ app.patch('/api/staff/declarations/:id', authenticateToken, async (req, res) => 
   }
 });
 
-// 8. Correction en lot d'un numéro de vol mal saisi par plusieurs passagers
+// 8. Correction en lot d'un numéro de vol
 app.post('/api/staff/bulk-fix-flight', authenticateToken, async (req, res) => {
   try {
     const { station, flightDate, wrongFlight, correctFlight } = req.body;
